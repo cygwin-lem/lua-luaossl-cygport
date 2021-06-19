@@ -1,0 +1,139 @@
+NAME="lua-luaossl"
+VERSION=20200709p1
+RELEASE=1
+CATEGORY="Lua"
+SUMMARY="A comprehensive binding to OpenSSL"
+DESCRIPTION="\
+luaossl is a comprehensive binding to OpenSSL for Lua 5.1, 5.2, and later.
+"
+HOMEPAGE="https://github.com/wahern/luaossl/"
+
+GIT_REPO="https://github.com/wahern/luaossl"
+declare -A GIT_DATEHASH_BY_NAME=(
+  # git log --date=iso-strict --format='%cd/%H' -1
+  [20200709p1]=2021-04-10T23:13:02+10:00/1054d12f23ecd177881b1bcb6ade92f247cc01e9
+  [20200709]=2020-07-09T23:10:19+10:00/rel-20200709
+)
+REV_HASH="${GIT_DATEHASH_BY_NAME[${VERSION}]#*/}"
+REV_DATE="${GIT_DATEHASH_BY_NAME[${VERSION}]%%/*}"
+REV_DATE_SHORT="${REV_DATE%%T*}"
+GIT_BASENAME="${GIT_REPO##*/}"
+SRC_URI="${GIT_REPO}/archive/${REV_HASH}/${GIT_BASENAME}-${VERSION}.tar.gz"
+SRC_DIR="${GIT_BASENAME}-${REV_HASH#v}"
+
+################################
+LUA_VERSIONS="5.3:5.4"
+LUA_PKG_NAME="luaossl"
+source lua.experiment
+
+################################
+## Patch files
+################################
+# Patch filenames are in a default style of 'git format-patch'
+PATCH_URI=$(\
+  find -maxdepth 1 -type f -name '[0-9][0-9][0-9][0-9]-*.patch' \
+  | sort \
+)
+# Additional patches, if any
+PATCH_URI+="
+"
+
+################################
+## Requirements for building
+################################
+BUILD_REQUIRES="\
+  lua53-devel\
+  lua54-devel\
+  libssl-devel\
+"
+# TEST_REQUIRES="\
+# "
+
+################################
+ABI=0
+
+
+################################
+_CYGPORT_RESTRICT_postinst_doc_=1
+
+set_packages_lua_versions ${LUA_VERSIONS} ${LUA_PKG_NAME}
+
+################################
+src_compile_lua() {
+  mkdir -p ${B}/${LUA_VERSION}
+  cd  ${B}/${LUA_VERSION}
+
+  lndirs ${S} .
+  cygmake \
+    DESTDIR=${D} \
+    prefix=/usr \
+    LUA_APIS="${LUA_VERSION}" \
+    CFLAGS="${CFLAGS} ${LUA_CFLAGS}" \
+    LIBS="${LUA_LIBS}" \
+  ;
+}
+
+################################
+src_install_lua() {
+  cd ${B}/${LUA_VERSION}
+
+  cygmake install \
+    DESTDIR=${D} \
+    prefix=/usr \
+    LUA_APIS="${LUA_VERSION}" \
+    CFLAGS="${CFLAGS} ${LUA_CFLAGS}" \
+    LIBS="${LUA_LIBS}" \
+  ;
+
+  dodoc LICENSE* README* doc/*
+}
+
+################################
+src_test_lua() {
+  cd ${B}/${LUA_VERSION}
+
+  local TEST_LUA_PATH="$(lua_path_from_dirs regress);$(lua_path_test ${LUA_VERSION})"
+  local TEST_LUA_CPATH="$(lua_cpath_test ${LUA_VERSION})"
+
+  local f
+  local -a pass=()
+  local -a skip=()
+  local -a fail=()
+  local -a all=()
+
+  for f in $( find regress -executable -name "*.lua" | sort -V ); do
+    all+=( "$f" )
+    case $f in
+      */104-*) ;& # Needs a module ffi (probably built-in ffi with LuaJIT)
+      */148-*) ;& # Needs a module cqueues https://github.com/wahern/cqueues/
+      __skip__)
+        skip+=( "$f" )
+        ;;
+      *)
+        echo ${LUA} $f
+        LUA_PATH="${TEST_LUA_PATH}" \
+        LUA_CPATH="${TEST_LUA_CPATH}" \
+        ${LUA} "$f" \
+        && pass+=( "$f" ) || fail+=( "$f" )
+        ;;
+    esac
+  done
+
+  echo "** Test Total ${#all[@]}"
+  #printf '%s\n' "${all[@]}"
+
+  if [ -n "${pass[*]}" ]; then
+    echo "** Passed ${#pass[@]}"
+    printf -- 'PASS %s\n' "${pass[@]}"
+  fi
+  if [ -n "${skip[*]}" ]; then
+  echo "** Skipped ${#skip[@]}"
+  printf -- 'SKIP %s\n' "${skip[@]}"
+  fi
+  if [ -n "${fail[*]}" ]; then
+    echo "** Failed ${#fail[@]}"
+    printf -- 'FAIL %s\n' "${fail[@]}"
+  fi
+}
+
+################################
