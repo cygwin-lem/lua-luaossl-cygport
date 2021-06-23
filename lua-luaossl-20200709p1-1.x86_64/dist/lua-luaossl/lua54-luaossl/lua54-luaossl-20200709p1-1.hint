@@ -1,5 +1,5 @@
 category: Lua
-requires: cygwin libssl1.1 lua54 lua54
+requires: cygwin libssl1.1 lua54
 sdesc: "A comprehensive binding to OpenSSL"
 ldesc: "luaossl is a comprehensive binding to OpenSSL for Lua 5.1, 5.2, and later.
 "
